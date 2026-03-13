@@ -1,24 +1,18 @@
 import Phaser from 'phaser'
 import { Player } from '../entities/Player'
-import { AgentNPC } from '../entities/AgentNPC'
-
-interface AgentData {
-  id: string
-  name: string
-  role: string
-  status: 'idle' | 'busy' | 'error'
-  x: number
-  y: number
-}
+import { AgentNPC, type AgentData } from '../entities/AgentNPC'
+import { ZustandBridge } from '../systems/ZustandBridge'
+import { useOfficeStore, type OfficeAgent } from '@/stores/office-store'
 
 export class OfficeScene extends Phaser.Scene {
   private player!: Player
-  private agents: AgentNPC[] = []
+  private agents: Map<string, AgentNPC> = new Map()
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys
   private wasd!: { W: Phaser.Input.Keyboard.Key; A: Phaser.Input.Keyboard.Key; S: Phaser.Input.Keyboard.Key; D: Phaser.Input.Keyboard.Key }
   private interactKey!: Phaser.Input.Keyboard.Key
   private interactionPrompt!: Phaser.GameObjects.Container
   private nearestAgent: AgentNPC | null = null
+  private zustandBridge!: ZustandBridge
 
   // Office dimensions
   private readonly OFFICE_WIDTH = 1200
@@ -30,6 +24,9 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Initialize Zustand bridge
+    this.zustandBridge = new ZustandBridge(this)
+    
     // Create office floor
     this.createOfficeFloor()
     
@@ -44,8 +41,17 @@ export class OfficeScene extends Phaser.Scene {
     this.add.existing(this.player)
     this.physics.add.existing(this.player)
     
-    // Create sample agents
-    this.createSampleAgents()
+    // Listen for agent updates from store
+    this.events.on('agents-updated', this.syncAgentsFromStore, this)
+    
+    // Initial agent sync from store
+    const initialAgents = useOfficeStore.getState().agents
+    if (initialAgents.length > 0) {
+      this.syncAgentsFromStore(initialAgents)
+    } else {
+      // Fallback to sample agents if no store data
+      this.createSampleAgents()
+    }
     
     // Setup camera
     this.cameras.main.setBounds(0, 0, this.OFFICE_WIDTH, this.OFFICE_HEIGHT)
@@ -73,8 +79,41 @@ export class OfficeScene extends Phaser.Scene {
     this.interactKey.on('down', () => this.handleInteraction())
   }
 
+  private syncAgentsFromStore(agents: OfficeAgent[]): void {
+    // Remove agents that no longer exist
+    const currentIds = new Set(agents.map(a => a.id))
+    for (const [id, npc] of this.agents) {
+      if (!currentIds.has(id)) {
+        npc.destroy()
+        this.agents.delete(id)
+      }
+    }
+
+    // Add or update agents
+    for (const agent of agents) {
+      const existing = this.agents.get(agent.id)
+      if (existing) {
+        // Update existing agent
+        existing.setStatus(agent.status)
+        if (agent.currentTask) {
+          existing.showStatusBubble(agent.currentTask.slice(0, 20) + '...')
+        }
+      } else {
+        // Create new agent
+        const data: AgentData = {
+          id: agent.id,
+          name: agent.name,
+          role: agent.role,
+          status: agent.status,
+        }
+        const npc = new AgentNPC(this, agent.x, agent.y, data)
+        this.add.existing(npc)
+        this.agents.set(agent.id, npc)
+      }
+    }
+  }
+
   private createOfficeFloor(): void {
-    // Create tiled floor
     for (let x = 0; x < this.OFFICE_WIDTH; x += this.TILE_SIZE) {
       for (let y = 0; y < this.OFFICE_HEIGHT; y += this.TILE_SIZE) {
         const tile = this.add.image(x, y, 'floor')
@@ -97,12 +136,10 @@ export class OfficeScene extends Phaser.Scene {
     ]
 
     zones.forEach(zone => {
-      // Zone background
       const bg = this.add.rectangle(zone.x, zone.y, zone.w, zone.h, zone.color, 0.08)
       bg.setOrigin(0, 0)
       bg.setStrokeStyle(1, zone.color, 0.3)
       
-      // Zone label
       this.add.text(zone.x + 10, zone.y + 8, zone.label, {
         fontFamily: 'monospace',
         fontSize: '11px',
@@ -149,23 +186,35 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   private createSampleAgents(): void {
-    // Sample agent data - will be replaced by real data from store
     const sampleAgents: AgentData[] = [
-      { id: 'forge', name: 'FORGE', role: 'Full-Stack Dev', status: 'busy', x: 100, y: 180 },
-      { id: 'infra', name: 'INFRA', role: 'DevOps', status: 'idle', x: 200, y: 180 },
-      { id: 'sentinel', name: 'SENTINEL', role: 'Security', status: 'busy', x: 300, y: 180 },
-      { id: 'architect', name: 'ARCHITECT', role: 'CTO', status: 'busy', x: 500, y: 180 },
-      { id: 'compass', name: 'COMPASS', role: 'Product', status: 'idle', x: 600, y: 180 },
-      { id: 'atlas', name: 'ATLAS', role: 'Research', status: 'busy', x: 900, y: 180 },
-      { id: 'scout', name: 'SCOUT', role: 'Intel', status: 'idle', x: 1000, y: 180 },
-      { id: 'sigma', name: 'SIGMA', role: 'AI/ML', status: 'busy', x: 100, y: 530 },
-      { id: 'quant', name: 'QUANT', role: 'Fintech', status: 'idle', x: 200, y: 530 },
+      { id: 'forge', name: 'FORGE', role: 'Full-Stack Dev', status: 'busy' },
+      { id: 'infra', name: 'INFRA', role: 'DevOps', status: 'idle' },
+      { id: 'sentinel', name: 'SENTINEL', role: 'Security', status: 'busy' },
+      { id: 'architect', name: 'ARCHITECT', role: 'CTO', status: 'busy' },
+      { id: 'compass', name: 'COMPASS', role: 'Product', status: 'idle' },
+      { id: 'atlas', name: 'ATLAS', role: 'Research', status: 'busy' },
+      { id: 'scout', name: 'SCOUT', role: 'Intel', status: 'idle' },
+      { id: 'sigma', name: 'SIGMA', role: 'AI/ML', status: 'busy' },
+      { id: 'quant', name: 'QUANT', role: 'Fintech', status: 'idle' },
     ]
 
+    const positions: Record<string, { x: number; y: number }> = {
+      forge: { x: 100, y: 180 },
+      infra: { x: 200, y: 180 },
+      sentinel: { x: 300, y: 180 },
+      architect: { x: 500, y: 180 },
+      compass: { x: 600, y: 180 },
+      atlas: { x: 900, y: 180 },
+      scout: { x: 1000, y: 180 },
+      sigma: { x: 100, y: 530 },
+      quant: { x: 200, y: 530 },
+    }
+
     sampleAgents.forEach(data => {
-      const agent = new AgentNPC(this, data.x, data.y, data)
+      const pos = positions[data.id] || { x: 600, y: 400 }
+      const agent = new AgentNPC(this, pos.x, pos.y, data)
       this.add.existing(agent)
-      this.agents.push(agent)
+      this.agents.set(data.id, agent)
     })
   }
 
@@ -201,14 +250,19 @@ export class OfficeScene extends Phaser.Scene {
     this.player.setVelocity(vx, vy)
     this.player.updateAnimation(vx, vy)
     
-    // Update player depth for proper layering
+    // Update player depth
     this.player.setDepth(this.player.y)
+    
+    // Update Zustand with throttled position
+    this.zustandBridge.updatePlayerPosition(this.player.x, this.player.y)
     
     // Check proximity to agents
     this.checkAgentProximity()
     
     // Update agents
-    this.agents.forEach(agent => agent.update())
+    for (const agent of this.agents.values()) {
+      agent.update()
+    }
   }
 
   private checkAgentProximity(): void {
@@ -216,7 +270,7 @@ export class OfficeScene extends Phaser.Scene {
     let nearest: AgentNPC | null = null
     let nearestDist = INTERACTION_RADIUS
 
-    for (const agent of this.agents) {
+    for (const agent of this.agents.values()) {
       const dist = Phaser.Math.Distance.Between(
         this.player.x, this.player.y,
         agent.x, agent.y
@@ -240,15 +294,19 @@ export class OfficeScene extends Phaser.Scene {
   private handleInteraction(): void {
     if (!this.nearestAgent) return
     
-    // Emit event for React to handle
-    this.events.emit('agent-interact', {
+    // Use bridge to open interaction modal
+    this.zustandBridge.openAgentInteraction({
       id: this.nearestAgent.agentData.id,
       name: this.nearestAgent.agentData.name,
       role: this.nearestAgent.agentData.role,
       status: this.nearestAgent.agentData.status,
+      x: this.nearestAgent.x,
+      y: this.nearestAgent.y,
     })
-    
-    // Also emit to game registry for cross-scene communication
-    this.game.events.emit('agent-interact', this.nearestAgent.agentData)
+  }
+
+  shutdown(): void {
+    this.zustandBridge?.destroy()
+    this.events.off('agents-updated', this.syncAgentsFromStore, this)
   }
 }
