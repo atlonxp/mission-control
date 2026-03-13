@@ -136,10 +136,10 @@ function buildGatewayProbeUrl(host: string, port: number): string | null {
 }
 
 /**
- * POST /api/gateways/health - Server-side health probe for all gateways
+ * GET|POST /api/gateways/health - Server-side health probe for all gateways
  * Probes gateways from the server where loopback addresses are reachable.
  */
-export async function POST(request: NextRequest) {
+async function probeGateways(request: NextRequest) {
   const auth = requireRole(request, "viewer")
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
 
@@ -244,3 +244,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ results, probed_at: Date.now() })
 }
+
+export { probeGateways as GET, probeGateways as POST }

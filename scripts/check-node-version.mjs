@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const SUPPORTED_NODE_MAJORS = [22, 24]
+const SUPPORTED_NODE_MAJORS = [22, 24, 25]
 
 const current = process.versions.node
 const currentMajor = Number.parseInt(current.split('.')[0] || '', 10)

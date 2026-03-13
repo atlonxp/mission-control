@@ -74,7 +74,9 @@ export const config = {
   openclawHome: openclawStateDir,
   openclawStateDir,
   openclawConfigPath,
-  openclawBin: process.env.OPENCLAW_BIN || 'openclaw',
+  openclawBin: process.env.OPENCLAW_BIN
+    ? path.resolve(process.cwd(), process.env.OPENCLAW_BIN)
+    : 'openclaw',
   clawdbotBin: process.env.CLAWDBOT_BIN || 'clawdbot',
   gatewayHost: process.env.OPENCLAW_GATEWAY_HOST || '127.0.0.1',
   gatewayPort: clampInt(Number(process.env.OPENCLAW_GATEWAY_PORT || '18789'), 1, 65535, 18789),

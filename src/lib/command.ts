@@ -23,7 +23,7 @@ export function runCommand(
     const child = spawn(command, args, {
       cwd: options.cwd,
       env: options.env,
-      shell: false
+      shell: true
     })
 
     let stdout = ''

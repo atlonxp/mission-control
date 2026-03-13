@@ -130,13 +130,20 @@ export function parseOpenClawDoctorOutput(
   const issues = lines
     .filter(line => /^[-*]\s+/.test(line))
     .map(line => line.replace(/^[-*]\s+/, '').trim())
-    .filter(line => !isSessionAgingLine(line) && !isStateDirectoryListLine(line))
+    .filter(line =>
+      !isSessionAgingLine(line) &&
+      !isStateDirectoryListLine(line) &&
+      !/^no\s+.*(?:warnings?|issues?|errors?)\s+detected/i.test(line) &&
+      !/^run:\s/i.test(line)
+    )
 
-  const mentionsWarnings = /\bwarning|warnings|problem|problems|invalid config|fix\b/i.test(raw)
-  const mentionsHealthy = /\bok\b|\bhealthy\b|\bno issues\b|\bvalid\b/i.test(raw)
+  const mentionsWarnings = /\bwarning|warnings|problem|problems|invalid config|fix\b/i.test(
+    issues.join('\n')
+  )
+  const mentionsHealthy = /\bok\b|\bhealthy\b|\bno issues\b|\bvalid\b|\bdoctor complete\b/i.test(raw)
 
   let level: OpenClawDoctorLevel = 'healthy'
-  if (exitCode !== 0 || /invalid config|failed|error/i.test(raw)) {
+  if (exitCode !== 0 || /invalid config|failed|(?<!\w)error(?!s:\s*0)/i.test(raw)) {
     level = 'error'
   } else if (issues.length > 0 || mentionsWarnings) {
     level = 'warning'

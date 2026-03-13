@@ -279,7 +279,7 @@ export function createUser(
   options?: { provider?: 'local' | 'google'; provider_user_id?: string | null; email?: string | null; avatar_url?: string | null; is_approved?: 0 | 1; approved_by?: string | null; approved_at?: number | null; workspace_id?: number }
 ): User {
   const db = getDatabase()
-  if (password.length < 12) throw new Error('Password must be at least 12 characters')
+  if (password.length < 8) throw new Error('Password must be at least 8 characters')
   const passwordHash = hashPassword(password)
   const provider = options?.provider || 'local'
   const workspaceId = options?.workspace_id || getDefaultWorkspaceContext().workspaceId
