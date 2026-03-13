@@ -1,7 +1,7 @@
 {
   "name": "mission-control",
   "version": "2.0.0",
-  "description": "OpenClaw Mission Control — open-source agent orchestration dashboard",
+  "description": "OpenClaw Mission Control \u2014 open-source agent orchestration dashboard",
   "scripts": {
     "verify:node": "node scripts/check-node-version.mjs",
     "dev": "pnpm run verify:node && next dev --hostname 127.0.0.1 --port ${PORT:-3000}",
@@ -33,7 +33,6 @@
     "eslint-config-next": "^16.1.6",
     "next": "^16.1.6",
     "next-themes": "^0.4.6",
-    "phaser": "^3.90.0",
     "pino": "^10.3.1",
     "postcss": "^8.5.2",
     "react": "^19.0.1",
@@ -48,7 +47,8 @@
     "typescript": "^5.7.2",
     "ws": "^8.19.0",
     "zod": "^4.3.6",
-    "zustand": "^5.0.11"
+    "zustand": "^5.0.11",
+    "phaser": "^3.87.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.51.0",
@@ -67,7 +67,7 @@
     "vitest": "^2.1.5"
   },
   "engines": {
-    "node": "22.x || 24.x || 25.x"
+    "node": ">=22"
   },
   "keywords": [
     "openclaw",

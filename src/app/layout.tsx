@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next'
-import { headers } from 'next/headers'
 import { Inter, JetBrains_Mono } from 'next/font/google'
+import { headers } from 'next/headers'
 import { ThemeProvider } from 'next-themes'
 import { THEME_IDS } from '@/lib/themes'
 import { ThemeBackground } from '@/components/ui/theme-background'
@@ -84,14 +84,18 @@ export default async function RootLayout({
 }: {
   children: React.ReactNode
 }) {
-  const nonce = (await headers()).get('x-nonce') ?? undefined
+  const nonce = (await headers()).get('x-nonce') || undefined
+
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
       <head>
-        {/* Blocking script: static string literal, no user input — safe inline. */}
+        {/* Blocking script to set 'dark' class before first paint, preventing FOUC.
+            Content is a static string literal — no user input, no XSS vector. */}
         <script
           nonce={nonce}
-          dangerouslySetInnerHTML={{ __html: "(function(){try{var t=localStorage.getItem('theme')||'void';var light=['light','paper'];if(light.indexOf(t)===-1)document.documentElement.classList.add('dark')}catch(e){}})()" }}
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('theme')||'void';var light=['light','paper'];if(light.indexOf(t)===-1)document.documentElement.classList.add('dark')}catch(e){}})()`,
+          }}
         />
       </head>
       <body className={`${inter.variable} ${jetbrainsMono.variable} font-sans antialiased`} suppressHydrationWarning>
