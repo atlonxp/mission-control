@@ -1,0 +1,5 @@
+export { createOfficeGame, destroyOfficeGame } from './OfficeGame'
+export { BootScene } from './scenes/BootScene'
+export { OfficeScene } from './scenes/OfficeScene'
+export { Player } from './entities/Player'
+export { AgentNPC } from './entities/AgentNPC'
