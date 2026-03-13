@@ -22,15 +22,21 @@ export async function GET() {
   let installed: string | null = null
 
   try {
-    const result = await runOpenClaw(['--version'], { timeoutMs: 3000 })
+    const result = await runOpenClaw(['--version'], { timeoutMs: 5000 })
     const match = result.stdout.match(/(\d+\.\d+\.\d+)/)
     if (match) installed = match[1]
-  } catch {
-    // OpenClaw not installed or not reachable
-    return NextResponse.json(
-      { installed: null, latest: null, updateAvailable: false },
-      { headers }
-    )
+  } catch (err: any) {
+    // openclaw --version may exit non-zero due to Docker warnings; still parse output
+    const combined = `${err?.stdout || ''}\n${err?.stderr || ''}`
+    const match = combined.match(/(\d+\.\d+\.\d+)/)
+    if (match) {
+      installed = match[1]
+    } else {
+      return NextResponse.json(
+        { installed: null, latest: null, updateAvailable: false },
+        { headers }
+      )
+    }
   }
 
   if (!installed) {

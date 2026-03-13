@@ -134,7 +134,12 @@ export function parseOpenClawDoctorOutput(
       !isSessionAgingLine(line) &&
       !isStateDirectoryListLine(line) &&
       !/^no\s+.*(?:warnings?|issues?|errors?)\s+detected/i.test(line) &&
-      !/^run:\s/i.test(line)
+      !/^run:\s/i.test(line) &&
+      !/gateway bound to .?lan/i.test(line) &&
+      !/ensure your auth credentials/i.test(line) &&
+      !/safer remote access/i.test(line) &&
+      !/example tunnel/i.test(line) &&
+      !/docs:.*gateway\/remote/i.test(line)
     )
 
   const mentionsWarnings = /\bwarning|warnings|problem|problems|invalid config|fix\b/i.test(
