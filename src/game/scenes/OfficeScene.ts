@@ -2,6 +2,7 @@ import Phaser from 'phaser'
 import { Player } from '../entities/Player'
 import { AgentNPC, type AgentData } from '../entities/AgentNPC'
 import { ZustandBridge } from '../systems/ZustandBridge'
+import { RoamingSystem } from '../systems/RoamingSystem'
 import { useOfficeStore, type OfficeAgent } from '@/stores/office-store'
 
 export class OfficeScene extends Phaser.Scene {
@@ -13,8 +14,9 @@ export class OfficeScene extends Phaser.Scene {
   private interactionPrompt!: Phaser.GameObjects.Container
   private nearestAgent: AgentNPC | null = null
   private zustandBridge!: ZustandBridge
+  private roamingSystem!: RoamingSystem
+  private lastRoamCheck = 0
 
-  // Office dimensions
   private readonly OFFICE_WIDTH = 1200
   private readonly OFFICE_HEIGHT = 800
   private readonly TILE_SIZE = 32
@@ -24,41 +26,31 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Initialize Zustand bridge
     this.zustandBridge = new ZustandBridge(this)
+    this.roamingSystem = new RoamingSystem(this)
     
-    // Create office floor
     this.createOfficeFloor()
-    
-    // Create zones
     this.createZones()
-    
-    // Create furniture
     this.createFurniture()
     
-    // Create player (CEO)
     this.player = new Player(this, 600, 400)
     this.add.existing(this.player)
     this.physics.add.existing(this.player)
     
-    // Listen for agent updates from store
     this.events.on('agents-updated', this.syncAgentsFromStore, this)
+    this.events.on('check-idle-agents', this.triggerIdleRoaming, this)
     
-    // Initial agent sync from store
     const initialAgents = useOfficeStore.getState().agents
     if (initialAgents.length > 0) {
       this.syncAgentsFromStore(initialAgents)
     } else {
-      // Fallback to sample agents if no store data
       this.createSampleAgents()
     }
     
-    // Setup camera
     this.cameras.main.setBounds(0, 0, this.OFFICE_WIDTH, this.OFFICE_HEIGHT)
     this.cameras.main.startFollow(this.player, true, 0.1, 0.1)
     this.cameras.main.setZoom(1.2)
     
-    // Setup input
     this.cursors = this.input.keyboard!.createCursorKeys()
     this.wasd = {
       W: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
@@ -68,19 +60,23 @@ export class OfficeScene extends Phaser.Scene {
     }
     this.interactKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E)
     
-    // Create interaction prompt
     this.createInteractionPrompt()
     
-    // Setup world bounds
     this.physics.world.setBounds(0, 0, this.OFFICE_WIDTH, this.OFFICE_HEIGHT)
     this.player.setCollideWorldBounds(true)
     
-    // Interaction key handler
     this.interactKey.on('down', () => this.handleInteraction())
   }
 
+  private triggerIdleRoaming(): void {
+    for (const agent of this.agents.values()) {
+      if (agent.agentData.status === 'idle' && Math.random() < 0.3) {
+        this.roamingSystem.startRoaming(agent)
+      }
+    }
+  }
+
   private syncAgentsFromStore(agents: OfficeAgent[]): void {
-    // Remove agents that no longer exist
     const currentIds = new Set(agents.map(a => a.id))
     for (const [id, npc] of this.agents) {
       if (!currentIds.has(id)) {
@@ -89,17 +85,14 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
 
-    // Add or update agents
     for (const agent of agents) {
       const existing = this.agents.get(agent.id)
       if (existing) {
-        // Update existing agent
         existing.setStatus(agent.status)
         if (agent.currentTask) {
           existing.showStatusBubble(agent.currentTask.slice(0, 20) + '...')
         }
       } else {
-        // Create new agent
         const data: AgentData = {
           id: agent.id,
           name: agent.name,
@@ -131,7 +124,7 @@ export class OfficeScene extends Phaser.Scene {
       { x: 450, y: 50, w: 300, h: 300, label: 'Product Studio', color: 0x34d399 },
       { x: 800, y: 50, w: 350, h: 300, label: 'Research Lab', color: 0xa78bfa },
       { x: 50, y: 400, w: 300, h: 350, label: 'Operations', color: 0xfbbf24 },
-      { x: 400, y: 400, w: 400, h: 350, label: 'Lounge', color: 0xf472b6 },
+      { x: 400, y: 400, w: 400, h: 350, label: 'Lounge ☕', color: 0xf472b6 },
       { x: 850, y: 400, w: 300, h: 350, label: 'Meeting Room', color: 0x60a5fa },
     ]
 
@@ -150,16 +143,12 @@ export class OfficeScene extends Phaser.Scene {
 
   private createFurniture(): void {
     const deskPositions = [
-      // Engineering
       { x: 100, y: 150 }, { x: 200, y: 150 }, { x: 300, y: 150 },
       { x: 100, y: 280 }, { x: 200, y: 280 }, { x: 300, y: 280 },
-      // Product
       { x: 500, y: 150 }, { x: 600, y: 150 },
       { x: 500, y: 280 }, { x: 600, y: 280 },
-      // Research
       { x: 900, y: 150 }, { x: 1000, y: 150 },
       { x: 900, y: 280 }, { x: 1000, y: 280 },
-      // Operations
       { x: 100, y: 500 }, { x: 200, y: 500 },
       { x: 100, y: 630 }, { x: 200, y: 630 },
     ]
@@ -178,11 +167,18 @@ export class OfficeScene extends Phaser.Scene {
       computer.setDepth(pos.y + 1)
     })
 
-    // Plants
     this.add.image(45, 380, 'plant1').setScale(1.2)
     this.add.image(1155, 380, 'plant2').setScale(1.2)
     this.add.image(395, 750, 'plant1').setScale(1.0)
     this.add.image(805, 750, 'plant2').setScale(1.0)
+    
+    // Coffee machine in lounge
+    this.add.rectangle(480, 620, 40, 40, 0x8B4513, 0.8).setStrokeStyle(2, 0x5D3A1A)
+    this.add.text(480, 620, '☕', { fontSize: '20px' }).setOrigin(0.5)
+    
+    // Whiteboard in meeting room
+    this.add.rectangle(950, 430, 80, 50, 0xffffff, 0.9).setStrokeStyle(2, 0x333333)
+    this.add.text(950, 430, '📋', { fontSize: '24px' }).setOrigin(0.5)
   }
 
   private createSampleAgents(): void {
@@ -199,15 +195,10 @@ export class OfficeScene extends Phaser.Scene {
     ]
 
     const positions: Record<string, { x: number; y: number }> = {
-      forge: { x: 100, y: 180 },
-      infra: { x: 200, y: 180 },
-      sentinel: { x: 300, y: 180 },
-      architect: { x: 500, y: 180 },
-      compass: { x: 600, y: 180 },
-      atlas: { x: 900, y: 180 },
-      scout: { x: 1000, y: 180 },
-      sigma: { x: 100, y: 530 },
-      quant: { x: 200, y: 530 },
+      forge: { x: 100, y: 180 }, infra: { x: 200, y: 180 }, sentinel: { x: 300, y: 180 },
+      architect: { x: 500, y: 180 }, compass: { x: 600, y: 180 },
+      atlas: { x: 900, y: 180 }, scout: { x: 1000, y: 180 },
+      sigma: { x: 100, y: 530 }, quant: { x: 200, y: 530 },
     }
 
     sampleAgents.forEach(data => {
@@ -235,8 +226,7 @@ export class OfficeScene extends Phaser.Scene {
     this.interactionPrompt.setDepth(1000)
   }
 
-  update(): void {
-    // Handle movement
+  update(_time: number, delta: number): void {
     const speed = 150
     let vx = 0
     let vy = 0
@@ -249,17 +239,14 @@ export class OfficeScene extends Phaser.Scene {
     
     this.player.setVelocity(vx, vy)
     this.player.updateAnimation(vx, vy)
-    
-    // Update player depth
     this.player.setDepth(this.player.y)
     
-    // Update Zustand with throttled position
     this.zustandBridge.updatePlayerPosition(this.player.x, this.player.y)
-    
-    // Check proximity to agents
     this.checkAgentProximity()
     
-    // Update agents
+    // Update roaming system
+    this.roamingSystem.update(delta)
+    
     for (const agent of this.agents.values()) {
       agent.update()
     }
@@ -294,7 +281,6 @@ export class OfficeScene extends Phaser.Scene {
   private handleInteraction(): void {
     if (!this.nearestAgent) return
     
-    // Use bridge to open interaction modal
     this.zustandBridge.openAgentInteraction({
       id: this.nearestAgent.agentData.id,
       name: this.nearestAgent.agentData.name,
@@ -307,6 +293,8 @@ export class OfficeScene extends Phaser.Scene {
 
   shutdown(): void {
     this.zustandBridge?.destroy()
+    this.roamingSystem?.destroy()
     this.events.off('agents-updated', this.syncAgentsFromStore, this)
+    this.events.off('check-idle-agents', this.triggerIdleRoaming, this)
   }
 }
